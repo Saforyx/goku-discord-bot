@@ -9,20 +9,10 @@ const {
 } = require("@discordjs/voice");
 const express = require("express");
 const path = require("path");
-const fs = require("fs");
-const vosk = require("vosk");
+const { Deepgram } = require("@deepgram/sdk");
+require("dotenv").config();
 
-vosk.setLogLevel(0);
-const MODEL_PATH = "vosk-model-small-en-us-0.15";
-let model = null;
-
-// Load model safely
-if (!fs.existsSync(MODEL_PATH)) {
-    console.warn("⚠️ Vosk model not found! Speech recognition will be disabled.");
-    console.warn("Check the Render build logs to see if postinstall ran correctly.");
-} else {
-    model = new vosk.Model(MODEL_PATH);
-}
+const deepgram = new Deepgram(process.env.DEEPGRAM_API_KEY);
 
 const client = new Client({
     intents: [
@@ -31,7 +21,7 @@ const client = new Client({
     ]
 });
 
-// Dragon Ball dictionary
+// Dragon Ball Vocabulary
 const dragonBallTerms = [
     "goku", "vegeta", "piccolo", "gohan", "trunks", "frieza",
     "kamehameha", "kaioken", "spirit bomb", "ultra instinct",
@@ -39,7 +29,7 @@ const dragonBallTerms = [
     "final flash", "destructo disk", "fusion", "cell", "android"
 ];
 
-// Helper: fuzzy match Dragon Ball words
+// Helper: fuzzy match Dragon Ball terms
 function correctDragonBallTerms(text) {
     let corrected = text;
     for (const term of dragonBallTerms) {
@@ -78,34 +68,41 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             });
 
             const receiver = connection.receiver;
-            receiver.speaking.on("start", (userId) => {
+            receiver.speaking.on("start", async (userId) => {
                 const user = client.users.cache.get(userId);
                 if (!user || user.bot) return;
 
-                if (!model) {
-                    console.log("Skipping speech recognition (model missing).");
-                    return;
-                }
+                console.log(`Started listening to ${user.username}`);
 
                 const audioStream = receiver.subscribe(userId, {
                     end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
                 });
 
-                const recognizer = new vosk.Recognizer({ model: model, sampleRate: 48000 });
+                // Create Deepgram live connection
+                const deepgramLive = deepgram.transcription.live({
+                    model: "nova", // Best model
+                    punctuate: true,
+                    encoding: "linear16",
+                    sample_rate: 48000,
+                });
 
+                // Pipe audio into Deepgram
                 audioStream.on("data", (chunk) => {
-                    if (recognizer.acceptWaveform(chunk)) {
-                        let result = recognizer.result();
-                        if (result.text) {
-                            let fixedText = correctDragonBallTerms(result.text);
-                            console.log(`[${user.username}] said: ${fixedText}`);
-                        }
-                    }
+                    deepgramLive.send(chunk);
                 });
 
                 audioStream.on("end", () => {
-                    console.log("Stopped listening to " + user.username);
-                    recognizer.free();
+                    deepgramLive.finish();
+                    console.log(`Stopped listening to ${user.username}`);
+                });
+
+                deepgramLive.on("transcriptReceived", (dgMessage) => {
+                    const data = JSON.parse(dgMessage);
+                    const transcript = data.channel.alternatives[0].transcript;
+                    if (transcript) {
+                        const fixedText = correctDragonBallTerms(transcript);
+                        console.log(`[${user.username}] said: ${fixedText}`);
+                    }
                 });
             });
         }
