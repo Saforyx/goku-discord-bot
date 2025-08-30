@@ -12,6 +12,7 @@ const path = require("path");
 const { Deepgram } = require("@deepgram/sdk");
 require("dotenv").config();
 
+// Deepgram client
 const deepgram = new Deepgram(process.env.DEEPGRAM_API_KEY);
 
 const client = new Client({
@@ -50,6 +51,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
     const channel = newState.channel || oldState.channel;
     if (!channel) return;
 
+    // When first human joins
     if (newState.channelId && !oldState.channelId && newState.member.id !== client.user.id) {
         const nonBotMembers = channel.members.filter(m => !m.user.bot);
         if (nonBotMembers.size === 1) {
@@ -79,13 +81,12 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                     end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
                 });
 
-                // Create Deepgram live connection (fixed for v3 SDK)
-                const deepgramLive = deepgram.transcription.live({
+                // Create Deepgram live transcription session
+                const deepgramLive = await deepgram.transcription.live({
                     model: "nova",
-                    punctuate: true,
+                    smart_format: true
                 });
 
-                // Pipe audio into Deepgram
                 audioStream.on("data", (chunk) => {
                     deepgramLive.send(chunk);
                 });
@@ -95,24 +96,35 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                     console.log(`Stopped listening to ${user.username}`);
                 });
 
-                deepgramLive.on("transcriptReceived", (dgMessage) => {
+                // Handle Deepgram messages
+                deepgramLive.on("message", (dgMessage) => {
                     const data = JSON.parse(dgMessage);
-                    const transcript = data.channel.alternatives[0].transcript;
-                    if (transcript) {
-                        const fixedText = correctDragonBallTerms(transcript);
-                        console.log(`[${user.username}] said: ${fixedText}`);
+                    if (data.type === "Results") {
+                        const transcript = data.channel.alternatives[0].transcript;
+                        if (transcript) {
+                            const fixedText = correctDragonBallTerms(transcript);
+                            console.log(`[${user.username}] said: ${fixedText}`);
 
-                        // Send transcript to Discord channel
-                        const textChannel = client.channels.cache.find(c => c.name === "audio-transcription");
-                        if (textChannel) {
-                            textChannel.send(`[${user.username}] said: ${fixedText}`);
+                            const textChannel = client.channels.cache.find(c => c.name === "audio-transcription");
+                            if (textChannel) {
+                                textChannel.send(`[${user.username}] said: ${fixedText}`);
+                            }
                         }
                     }
+                });
+
+                deepgramLive.on("close", () => {
+                    console.log("Deepgram connection closed");
+                });
+
+                deepgramLive.on("error", (err) => {
+                    console.error("Deepgram error:", err);
                 });
             });
         }
     }
 
+    // When everyone leaves
     if (oldState.channelId && !newState.channelId) {
         const voiceChannel = oldState.channel;
         const nonBotMembers = voiceChannel.members.filter(m => !m.user.bot);
@@ -120,12 +132,13 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             const connection = getVoiceConnection(voiceChannel.guild.id);
             if (connection) {
                 connection.destroy();
-                console.log("Everyone left, bot disconnected. Ready for next join cycle.");
+                console.log("Everyone left, bot disconnected.");
             }
         }
     }
 });
 
+// Keep Render alive with web service
 const app = express();
 app.get("/", (req, res) => res.send("Goku bot is alive!"));
 const PORT = process.env.PORT || 3000;
