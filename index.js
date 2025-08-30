@@ -14,11 +14,15 @@ const vosk = require("vosk");
 
 vosk.setLogLevel(0);
 const MODEL_PATH = "vosk-model-small-en-us-0.15";
+let model = null;
+
+// Load model safely
 if (!fs.existsSync(MODEL_PATH)) {
-    console.error("Vosk model not found! Make sure it's downloaded and extracted.");
-    process.exit(1);
+    console.warn("⚠️ Vosk model not found! Speech recognition will be disabled.");
+    console.warn("Check the Render build logs to see if postinstall ran correctly.");
+} else {
+    model = new vosk.Model(MODEL_PATH);
 }
-const model = new vosk.Model(MODEL_PATH);
 
 const client = new Client({
     intents: [
@@ -77,6 +81,11 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             receiver.speaking.on("start", (userId) => {
                 const user = client.users.cache.get(userId);
                 if (!user || user.bot) return;
+
+                if (!model) {
+                    console.log("Skipping speech recognition (model missing).");
+                    return;
+                }
 
                 const audioStream = receiver.subscribe(userId, {
                     end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
