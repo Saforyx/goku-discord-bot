@@ -13,7 +13,7 @@
     "@discordjs/opus": "^0.9.0",
     "sodium": "^3.0.2",
     "express": "^4.19.2",
-    "@deepgram/sdk": "^3.0.0"
+    "@deepgram/sdk": "3.0.0"
   },
   "engines": {
     "node": ">=18.x"
