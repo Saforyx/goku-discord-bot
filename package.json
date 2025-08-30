@@ -1,7 +1,7 @@
 {
   "name": "goku-discord-bot",
   "version": "1.0.0",
-  "description": "A simple Discord bot that lets you talk to Goku.",
+  "description": "Talk to Goku in Discord! A simple Discord bot.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
