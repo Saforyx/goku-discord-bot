@@ -4,7 +4,7 @@
   "description": "Talk to Goku in Discord! A simple Discord bot.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node -v && node index.js"
   },
   "dependencies": {
     "discord.js": "^14.15.3",
