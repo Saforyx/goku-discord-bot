@@ -81,8 +81,8 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                     end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
                 });
 
-                // Create Deepgram live transcription session
-                const deepgramLive = await deepgram.transcription.live({
+                // Deepgram SDK v3 live transcription
+                const deepgramLive = deepgram.listen.live({
                     model: "nova",
                     smart_format: true
                 });
@@ -97,7 +97,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                 });
 
                 // Handle Deepgram messages
-                deepgramLive.on("message", (dgMessage) => {
+                deepgramLive.on("transcriptReceived", (dgMessage) => {
                     const data = JSON.parse(dgMessage);
                     if (data.type === "Results") {
                         const transcript = data.channel.alternatives[0].transcript;
