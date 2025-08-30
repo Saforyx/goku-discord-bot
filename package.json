@@ -4,8 +4,7 @@
   "description": "Talk to Goku in Discord! A simple Discord bot.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "echo 'Downloading Vosk model...' && curl -L -o model.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip && unzip -o model.zip -d . && rm model.zip && echo 'Vosk model installed successfully.'"
+    "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.15.3",
@@ -14,7 +13,7 @@
     "@discordjs/opus": "^0.9.0",
     "sodium": "^3.0.2",
     "express": "^4.19.2",
-    "vosk": "0.3.39"
+    "@deepgram/sdk": "^3.0.0"
   },
   "engines": {
     "node": ">=18.x"
