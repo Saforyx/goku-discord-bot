@@ -3,50 +3,49 @@ const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerSta
 require("dotenv").config();
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildVoiceStates
-  ]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates,
+    ],
 });
+
+let connection;
 
 client.on("ready", () => {
-  console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`Logged in as ${client.user.tag}`);
 });
 
-client.on("messageCreate", async (msg) => {
-  if (msg.content === "!goku join") {
-    const channel = msg.member?.voice.channel;
+client.on("voiceStateUpdate", (oldState, newState) => {
+    if (!oldState.channelId && newState.channelId) {
+        const channel = newState.channel;
+        if (channel.name === "General" && !connection) {
+            connection = joinVoiceChannel({
+                channelId: channel.id,
+                guildId: channel.guild.id,
+                adapterCreator: channel.guild.voiceAdapterCreator,
+            });
 
-    if (!channel) {
-      msg.reply("You need to join a voice channel first!");
-      return;
+            const player = createAudioPlayer();
+            const resource = createAudioResource("goku.mp3");
+            connection.subscribe(player);
+            player.play(resource);
+
+            player.on(AudioPlayerStatus.Idle, () => {
+                console.log("Finished playing Goku's line, staying in VC.");
+            });
+        }
     }
 
-    const connection = joinVoiceChannel({
-      channelId: channel.id,
-      guildId: channel.guild.id,
-      adapterCreator: channel.guild.voiceAdapterCreator,
-      selfDeaf: false,
-    });
-
-    msg.channel.send("I'm here!");
-
-    try {
-      const player = createAudioPlayer();
-      const resource = createAudioResource("goku.mp3");
-      connection.subscribe(player);
-
-      player.play(resource);
-
-      player.on(AudioPlayerStatus.Idle, () => {
-        console.log("Finished playing Goku's voice line.");
-      });
-    } catch (err) {
-      console.error("Error playing audio:", err);
+    if (oldState.channelId && !newState.channelId) {
+        const channel = oldState.channel;
+        if (channel && channel.members.filter(m => !m.user.bot).size === 0) {
+            console.log("Everyone left, disconnecting...");
+            connection.destroy();
+            connection = null;
+        }
     }
-  }
 });
 
 client.login(process.env.DISCORD_TOKEN);
