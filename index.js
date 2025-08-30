@@ -79,12 +79,10 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                     end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
                 });
 
-                // Create Deepgram live connection
+                // Create Deepgram live connection (fixed for v3 SDK)
                 const deepgramLive = deepgram.transcription.live({
                     model: "nova",
                     punctuate: true,
-                    encoding: "linear16",
-                    sample_rate: 48000,
                 });
 
                 // Pipe audio into Deepgram
