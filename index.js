@@ -1,16 +1,24 @@
 const { Client, GatewayIntentBits } = require("discord.js");
-const { joinVoiceChannel, getVoiceConnection, EndBehaviorType } = require("@discordjs/voice");
+const {
+    joinVoiceChannel,
+    createAudioPlayer,
+    createAudioResource,
+    AudioPlayerStatus,
+    getVoiceConnection,
+    EndBehaviorType
+} = require("@discordjs/voice");
 const express = require("express");
+const path = require("path");
 const fs = require("fs");
 const vosk = require("vosk");
-const { Readable } = require("stream");
+const prism = require("prism-media");
 
+vosk.setLogLevel(0);
 const MODEL_PATH = "vosk-model-small-en-us-0.15";
 if (!fs.existsSync(MODEL_PATH)) {
-    console.error("Vosk model not found, make sure it's unzipped.");
+    console.error("Vosk model not found! Make sure it's downloaded and extracted.");
     process.exit(1);
 }
-vosk.setLogLevel(0);
 const model = new vosk.Model(MODEL_PATH);
 
 const client = new Client({
@@ -19,6 +27,8 @@ const client = new Client({
         GatewayIntentBits.GuildVoiceStates
     ]
 });
+
+let currentSpeaker = null;
 
 client.once("ready", () => {
     console.log(`Logged in as ${client.user.tag}`);
@@ -31,41 +41,55 @@ client.on("voiceStateUpdate", (oldState, newState) => {
     if (newState.channelId && !oldState.channelId && newState.member.id !== client.user.id) {
         const nonBotMembers = channel.members.filter(m => !m.user.bot);
         if (nonBotMembers.size === 1) {
-            console.log(`${newState.member.user.username} joined VC. Starting speech recognition...`);
-
             const connection = joinVoiceChannel({
                 channelId: channel.id,
                 guildId: channel.guild.id,
                 adapterCreator: channel.guild.voiceAdapterCreator
             });
 
+            const player = createAudioPlayer();
+            const resource = createAudioResource(path.join(__dirname, "goku.mp3"));
+            player.play(resource);
+            connection.subscribe(player);
+
+            player.on(AudioPlayerStatus.Idle, () => {
+                console.log("Intro finished, bot is now listening...");
+            });
+
             const receiver = connection.receiver;
             receiver.speaking.on("start", (userId) => {
+                if (currentSpeaker) return;
                 const user = client.users.cache.get(userId);
-                console.log(`Listening to ${user ? user.username : "Unknown user"}...`);
+                if (!user || user.bot) return;
 
-                const audioStream = receiver.subscribe(userId, {
-                    end: { behavior: EndBehaviorType.AfterSilence, duration: 100 }
+                currentSpeaker = userId;
+                console.log(`Now listening to ${user.username}`);
+
+                const opusStream = receiver.subscribe(userId, {
+                    end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
                 });
 
-                const rec = new vosk.Recognizer({ model: model, sampleRate: 48000 });
-                const readable = new Readable().wrap(audioStream);
+                const pcmStream = opusStream.pipe(new prism.opus.Decoder({
+                    rate: 48000,
+                    channels: 1,
+                    frameSize: 960
+                }));
 
-                readable.on("data", (chunk) => {
-                    if (rec.acceptWaveform(chunk)) {
-                        const result = rec.result();
+                const recognizer = new vosk.Recognizer({ model: model, sampleRate: 48000 });
+
+                pcmStream.on("data", (chunk) => {
+                    if (recognizer.acceptWaveform(chunk)) {
+                        const result = recognizer.result();
                         if (result.text) {
-                            console.log(`${user ? user.username : "User"} said: ${result.text}`);
+                            console.log(`[${user.username}] said: ${result.text}`);
                         }
                     }
                 });
 
-                readable.on("end", () => {
-                    const final = rec.finalResult();
-                    if (final.text) {
-                        console.log(`${user ? user.username : "User"} (final): ${final.text}`);
-                    }
-                    rec.free();
+                pcmStream.on("end", () => {
+                    console.log(`Stopped listening to ${user.username}`);
+                    recognizer.free();
+                    currentSpeaker = null;
                 });
             });
         }
@@ -78,7 +102,8 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             const connection = getVoiceConnection(voiceChannel.guild.id);
             if (connection) {
                 connection.destroy();
-                console.log("Everyone left, bot disconnected.");
+                currentSpeaker = null;
+                console.log("Everyone left, bot disconnected. Ready for next join cycle.");
             }
         }
     }
