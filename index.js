@@ -1,59 +1,59 @@
 const { Client, GatewayIntentBits } = require("discord.js");
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require("@discordjs/voice");
-const fs = require("fs");
-require("dotenv").config();
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, getVoiceConnection } = require("@discordjs/voice");
+const express = require("express");
+const path = require("path");
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.GuildVoiceStates
     ]
 });
 
-const player = createAudioPlayer();
+client.once("ready", () => {
+    console.log(`Logged in as ${client.user.tag}`);
+});
 
 client.on("voiceStateUpdate", (oldState, newState) => {
-    const user = newState.member;
-    if (!user || user.user.bot) return;
+    const channel = newState.channel || oldState.channel;
+    if (!channel) return;
 
-    const channel = newState.channel;
-    if (channel && channel.members.filter(m => !m.user.bot).size === 1) {
-        console.log(`User ${user.user.tag} joined ${channel.name}. Goku is joining!`);
-        const connection = joinVoiceChannel({
-            channelId: channel.id,
-            guildId: channel.guild.id,
-            adapterCreator: channel.guild.voiceAdapterCreator
-        });
+    if (newState.channelId && !oldState.channelId && newState.member.id !== client.user.id) {
+        const nonBotMembers = channel.members.filter(m => !m.user.bot);
+        if (nonBotMembers.size === 1) {
+            const connection = joinVoiceChannel({
+                channelId: channel.id,
+                guildId: channel.guild.id,
+                adapterCreator: channel.guild.voiceAdapterCreator
+            });
 
-        if (fs.existsSync("goku.mp3")) {
-            console.log("Playing goku.mp3...");
-            const resource = createAudioResource("goku.mp3");
+            const player = createAudioPlayer();
+            const resource = createAudioResource(path.join(__dirname, "goku.mp3"));
             player.play(resource);
             connection.subscribe(player);
-        } else {
-            console.log("No goku.mp3 file found!");
+
+            player.on(AudioPlayerStatus.Idle, () => {
+                console.log("Intro finished, bot staying in channel.");
+            });
         }
     }
 
-    if (oldState.channel && oldState.channel.members.filter(m => !m.user.bot).size === 0) {
-        console.log(`Everyone left ${oldState.channel.name}. Goku is leaving.`);
-        const conn = oldState.guild.members.me.voice.connection;
-        if (conn) conn.destroy();
+    if (oldState.channelId && !newState.channelId) {
+        const voiceChannel = oldState.channel;
+        const nonBotMembers = voiceChannel.members.filter(m => !m.user.bot);
+        if (nonBotMembers.size === 0) {
+            const connection = getVoiceConnection(voiceChannel.guild.id);
+            if (connection) {
+                connection.destroy();
+                console.log("Everyone left, bot disconnected. Ready for next join cycle.");
+            }
+        }
     }
 });
 
-player.on(AudioPlayerStatus.Playing, () => {
-    console.log("Audio is now playing.");
-});
-
-player.on(AudioPlayerStatus.Idle, () => {
-    console.log("Audio finished playing.");
-});
-
-client.on("ready", () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-});
+const app = express();
+app.get("/", (req, res) => res.send("Goku bot is alive!"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Web service running on port ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN);
