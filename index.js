@@ -11,7 +11,6 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const vosk = require("vosk");
-const prism = require("prism-media");
 
 vosk.setLogLevel(0);
 const MODEL_PATH = "vosk-model-small-en-us-0.15";
@@ -28,7 +27,25 @@ const client = new Client({
     ]
 });
 
-let currentSpeaker = null;
+// Dragon Ball dictionary
+const dragonBallTerms = [
+    "goku", "vegeta", "piccolo", "gohan", "trunks", "frieza",
+    "kamehameha", "kaioken", "spirit bomb", "ultra instinct",
+    "dragon ball", "super saiyan", "beerus", "majin buu",
+    "final flash", "destructo disk", "fusion", "cell", "android"
+];
+
+// Helper: fuzzy match Dragon Ball words
+function correctDragonBallTerms(text) {
+    let corrected = text;
+    for (const term of dragonBallTerms) {
+        const regex = new RegExp(term.replace(" ", "\\s?"), "i");
+        if (regex.test(text)) {
+            corrected = corrected.replace(regex, term);
+        }
+    }
+    return corrected;
+}
 
 client.once("ready", () => {
     console.log(`Logged in as ${client.user.tag}`);
@@ -58,38 +75,28 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 
             const receiver = connection.receiver;
             receiver.speaking.on("start", (userId) => {
-                if (currentSpeaker) return;
                 const user = client.users.cache.get(userId);
                 if (!user || user.bot) return;
 
-                currentSpeaker = userId;
-                console.log(`Now listening to ${user.username}`);
-
-                const opusStream = receiver.subscribe(userId, {
+                const audioStream = receiver.subscribe(userId, {
                     end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
                 });
 
-                const pcmStream = opusStream.pipe(new prism.opus.Decoder({
-                    rate: 48000,
-                    channels: 1,
-                    frameSize: 960
-                }));
-
                 const recognizer = new vosk.Recognizer({ model: model, sampleRate: 48000 });
 
-                pcmStream.on("data", (chunk) => {
+                audioStream.on("data", (chunk) => {
                     if (recognizer.acceptWaveform(chunk)) {
-                        const result = recognizer.result();
+                        let result = recognizer.result();
                         if (result.text) {
-                            console.log(`[${user.username}] said: ${result.text}`);
+                            let fixedText = correctDragonBallTerms(result.text);
+                            console.log(`[${user.username}] said: ${fixedText}`);
                         }
                     }
                 });
 
-                pcmStream.on("end", () => {
-                    console.log(`Stopped listening to ${user.username}`);
+                audioStream.on("end", () => {
+                    console.log("Stopped listening to " + user.username);
                     recognizer.free();
-                    currentSpeaker = null;
                 });
             });
         }
@@ -102,7 +109,6 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             const connection = getVoiceConnection(voiceChannel.guild.id);
             if (connection) {
                 connection.destroy();
-                currentSpeaker = null;
                 console.log("Everyone left, bot disconnected. Ready for next join cycle.");
             }
         }
