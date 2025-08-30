@@ -10,6 +10,8 @@ const {
 const express = require("express");
 const path = require("path");
 const { Deepgram } = require("@deepgram/sdk");
+const prism = require("prism-media");
+const { PassThrough } = require("stream");
 require("dotenv").config();
 
 // Deepgram client
@@ -81,17 +83,33 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                     end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
                 });
 
-                // Deepgram SDK v3 live transcription
-                const deepgramLive = deepgram.listen.live({
-                    model: "nova",
-                    smart_format: true
+                // Deepgram live session
+                const deepgramLive = deepgram.listen.live(
+                    {
+                        model: "nova",
+                        smart_format: true
+                    },
+                    {
+                        encoding: "linear16",
+                        sample_rate: 16000
+                    }
+                );
+
+                // Decode Opus -> PCM16 mono 16kHz
+                const opusDecoder = new prism.opus.Decoder({
+                    rate: 16000,
+                    channels: 1,
+                    frameSize: 960
                 });
 
-                audioStream.on("data", (chunk) => {
+                const pcmStream = new PassThrough();
+                audioStream.pipe(opusDecoder).pipe(pcmStream);
+
+                pcmStream.on("data", (chunk) => {
                     deepgramLive.send(chunk);
                 });
 
-                audioStream.on("end", () => {
+                pcmStream.on("end", () => {
                     deepgramLive.finish();
                     console.log(`Stopped listening to ${user.username}`);
                 });
