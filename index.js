@@ -9,7 +9,7 @@ const {
 } = require("@discordjs/voice");
 const express = require("express");
 const path = require("path");
-const { Deepgram } = require("@deepgram/sdk");
+const Deepgram = require("@deepgram/sdk").Deepgram; // ✅ safer import
 const prism = require("prism-media");
 const { PassThrough } = require("stream");
 require("dotenv").config();
