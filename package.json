@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "postinstall": "curl -L -o model.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip && unzip -o model.zip -d . && rm model.zip"
+    "postinstall": "echo 'Downloading Vosk model...' && curl -L -o model.zip https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip && unzip -o model.zip -d . && rm model.zip && echo 'Vosk model installed successfully.'"
   },
   "dependencies": {
     "discord.js": "^14.15.3",
