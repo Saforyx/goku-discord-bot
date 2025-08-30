@@ -1,12 +1,9 @@
-require("dotenv").config();
 const { Client, GatewayIntentBits } = require("discord.js");
-
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildVoiceStates
+        GatewayIntentBits.MessageContent
     ]
 });
 
@@ -20,4 +17,5 @@ client.on("messageCreate", (msg) => {
     }
 });
 
-client.login(process.env.BOT_TOKEN);
+// Railway will inject the token securely
+client.login(process.env.DISCORD_TOKEN);
