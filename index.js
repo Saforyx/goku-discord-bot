@@ -17,7 +17,8 @@ const deepgram = new Deepgram(process.env.DEEPGRAM_API_KEY);
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages
     ]
 });
 
@@ -80,7 +81,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 
                 // Create Deepgram live connection
                 const deepgramLive = deepgram.transcription.live({
-                    model: "nova", // Best model
+                    model: "nova",
                     punctuate: true,
                     encoding: "linear16",
                     sample_rate: 48000,
@@ -102,6 +103,12 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                     if (transcript) {
                         const fixedText = correctDragonBallTerms(transcript);
                         console.log(`[${user.username}] said: ${fixedText}`);
+
+                        // Send transcript to Discord channel
+                        const textChannel = client.channels.cache.find(c => c.name === "audio-transcription");
+                        if (textChannel) {
+                            textChannel.send(`[${user.username}] said: ${fixedText}`);
+                        }
                     }
                 });
             });
